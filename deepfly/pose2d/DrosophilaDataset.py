@@ -29,23 +29,28 @@ from deepfly.pose2d.utils.transforms import (
     to_torch,
 )
 
+from skimage import transform
+
 FOLDER_NAME = 0
 IMAGE_NAME = 1
+
+# DATA_PREFIX = "/media/turritopsis/pierre/flypose-models/flypose-TuthillLab-2019-11-21/labeled-data"
+DATA_PREFIX = "/media/turritopsis/pierre/deepfly/labeled-data"
 
 
 def read_json(d, json_path, folder_train_list, cidread2cid):
     json_data = json.load(open(json_path, "r"))
     for session_id in json_data.keys():
         for folder_name in json_data[session_id]["data"].keys():
-            if folder_name not in folder_train_list:
+            if len(folder_train_list) > 0 and folder_name not in folder_train_list:
                 continue
             for image_name in json_data[session_id]["data"][folder_name].keys():
-                key = ("/data/annot/" + folder_name, image_name)
+                key = (DATA_PREFIX + "/" + folder_name, image_name)
                 # for the hand annotations, it is always correct ordering
                 cidread2cid[key[FOLDER_NAME]] = np.arange(config["num_cameras"])
-                cid_read, _ = parse_img_name(image_name)
-                if cid_read == 3:
-                    continue
+                # cid_read, _ = parse_img_name(image_name)
+                # if cid_read == 3:
+                #     continue
                 pts = json_data[session_id]["data"][folder_name][image_name]["position"]
                 d[key] = np.array(pts)
 
@@ -228,20 +233,20 @@ class DrosophilaDataset(data.Dataset):
             image_file = os.path.join(
                 self.data_folder,
                 folder_name.replace("_network", ""),
-                image_name + ".jpg",
+                image_name,
             )
 
             if not os.path.isfile(image_file):
                 self.annotation_dict.pop((folder_name, image_name), None)
                 print("FileNotFound: {}/{} ".format(folder_name, image_name))
 
-        normalize_annotations(self.annotation_dict, self.num_classes, self.cidread2cid)
+        # normalize_annotations(self.annotation_dict, self.num_classes, self.cidread2cid)
 
         self.annotation_key = list(self.annotation_dict.keys())
-        if self.evaluation:  # sort keys
-            self.annotation_key.sort(
-                key=lambda x: x[0] + "_" + x[1].split("_")[3] + "_" + x[1].split("_")[1]
-            )
+        # if self.evaluation:  # sort keys
+        self.annotation_key.sort(
+            # key=lambda x: x[0] + "_" + x[1].split("_")[3] + "_" + x[1].split("_")[1]
+        )
 
         self.mean, self.std = self._compute_mean()
 
@@ -265,7 +270,7 @@ class DrosophilaDataset(data.Dataset):
             std = torch.zeros(3)
             for k in self.annotation_key:
                 img_path = os.path.join(
-                    self.data_folder, k[FOLDER_NAME], k[IMAGE_NAME] + ".jpg"
+                    self.data_folder, k[FOLDER_NAME], k[IMAGE_NAME]
                 )
                 img = load_image(img_path)  # CxHxW
                 mean += img.view(img.size(0), -1).mean(1)
@@ -290,7 +295,7 @@ class DrosophilaDataset(data.Dataset):
         img_path = os.path.join(
             self.data_folder,
             folder_name.replace("_network", ""),
-            constr_img_name(camera_id, pose_id, pad=pad) + ".jpg",
+            constr_img_name(camera_id, pose_id, pad=pad),
         )
         return img_path
 
@@ -299,14 +304,16 @@ class DrosophilaDataset(data.Dataset):
             self.annotation_key[index][FOLDER_NAME],
             self.annotation_key[index][IMAGE_NAME],
         )
-        cid_read, pose_id = parse_img_name(img_name)
-        cid = self.cidread2cid[folder_name][cid_read]
-        flip = cid in config["flip_cameras"] and (
-            "annot" in folder_name or ("annot" not in folder_name and self.unlabeled)
-        )
+        # cid_read, pose_id = parse_img_name(img_name)
+        # cid = self.cidread2cid[folder_name][cid_read]
+        # flip = cid in config["flip_cameras"] and (
+        #     "annot" in folder_name or ("annot" not in folder_name and self.unlabeled)
+        # )
+        flip = False
 
         try:
-            img_orig = load_image(self.__get_image_path(folder_name, cid_read, pose_id))
+            # img_orig = load_image(self.__get_image_path(folder_name, cid_read, pose_id))
+            img_orig = load_image(os.path.join(folder_name, img_name))
         except FileNotFoundError:
             try:
                 img_orig = load_image(
@@ -333,19 +340,19 @@ class DrosophilaDataset(data.Dataset):
                 if (
                     (0.01 < pts[i][0] < 0.99)
                     and (0.01 < pts[i][1] < 0.99)
-                    and (
-                        config["skeleton"].camera_see_joint(cid, i)
-                        or config["skeleton"].camera_see_joint(
-                            cid, (i + config["num_predict"])
-                        )
-                    )
+                    # and (
+                    #     config["skeleton"].camera_see_joint(cid, i)
+                    #     or config["skeleton"].camera_see_joint(
+                    #         cid, (i + config["num_predict"])
+                    #     )
+                    # )
                 )
                 else 0
             )
         if flip:
             img_orig = torch.from_numpy(fliplr(img_orig.numpy())).float()
             pts = shufflelr(pts, width=img_orig.size(2), dataset="drosophila")
-        img_norm = im_to_torch(scipy.misc.imresize(img_orig, self.img_res))
+        img_norm = im_to_torch(transform.resize(img_orig, self.img_res))
 
         # Generate ground truth heatmap
         tpts = pts.clone()
@@ -373,8 +380,8 @@ class DrosophilaDataset(data.Dataset):
 
         img_norm = color_normalize(img_norm, self.mean, self.std)
 
-        if cid == 3 or cid == 7:
-            raise NotImplementedError
+        # if cid == 3 or cid == 7:
+        #     raise NotImplementedError
         meta = {
             "inp": resize(img_orig, 600, 350),
             "folder_name": folder_name,
@@ -384,17 +391,18 @@ class DrosophilaDataset(data.Dataset):
             "scale": 0,
             "pts": pts,
             "tpts": tpts,
-            "cid": cid,
-            "cam_read_id": cid_read,
-            "pid": pose_id,
+            "cid": 0,
+            "cam_read_id": 0,
+            "pid": index,
             "joint_exists": joint_exists,
         }
 
         return img_norm, target, meta
 
     def greatest_image_id(self):
-        ids = [parse_img_name(k[1])[1] for k in self.annotation_key]
-        return max(ids) if ids else 0
+        # ids = [parse_img_name(k[1])[1] for k in self.annotation_key]
+        # return max(ids) if ids else 0
+        return len(self.annotation_key)
 
     def __len__(self):
         return len(self.annotation_key)

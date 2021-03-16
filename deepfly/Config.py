@@ -1,6 +1,6 @@
 import os
 
-from deepfly import skeleton_h36m, skeleton_fly
+from deepfly import skeleton_h36m, skeleton_fly, skeleton_newfly
 
 default = {
     "flip_cameras": [],
@@ -120,10 +120,62 @@ config_h36m = {
     "alpha_bone": 0,
 }
 
+config_newfly = {
+    "name": "newfly",
+    "num_cameras": 6,
+    "image_shape": [864, 704],
+    "heatmap_shape": [176, 216],
+    "checkpoint": None,
+
+    "left_cameras": [0, 1, 2, 3, 4, 5],
+    "right_cameras": [],
+
+    # skeleton
+    "skeleton": skeleton_newfly,
+    "bones": skeleton_newfly.bones,
+    "bone_param": skeleton_newfly.bone_param,
+    "num_joints": skeleton_newfly.num_joints,
+
+    # pose 2d
+    # "resume": os.path.join(os.path.abspath(os.path.dirname(__file__)), "../weights/sh8_deepfly.tar"),
+    "resume": "",
+    "num_stacks": 2,
+    "batch_size": 12,
+    "num_predict": skeleton_newfly.num_joints,
+    "mean": os.path.join(os.path.abspath(os.path.dirname(__file__)), "../weights/mean.pth.tar"),
+
+    # plotting
+    "line_thickness": 2,
+    "scatter_r": 2,
+
+    # calibration
+    "calib_rough":
+        {
+            0: 0 / 57.2,
+            1: -30 / 57.2,
+            2: -70 / 57.2,
+            3: -125 / 57.2,
+            6: +110 / 57.2,
+            5: +150 / 57.2,
+            4: +179 / 57.2
+        },
+
+    # belief propagation
+    "num_peak": 5,
+    "upper_bound": 100,
+
+    "alpha_reproj": 30,
+    "alpha_heatmap": 600,
+    "alpha_bone": 0,
+}
+
+
 '''
 # setting defaults if they are missing
 config_fly = dict(list(default.items()) + list(config_fly.items()))
 config_h36m = dict(list(default.items()) + list(config_h36m.items()))
 '''
 
-config = config_fly
+config_newfly = dict(list(default.items()) + list(config_newfly.items()))
+
+config = config_newfly

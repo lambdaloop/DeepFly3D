@@ -100,8 +100,8 @@ def df3dLoss(output, target_var, joint_exists, num_classes):
     joint_exists = joint_exists.data.numpy()
     loss_weight = torch.ones((output[0].size(0), num_classes, 1, 1))
     if np.any(joint_exists == 0):
-        batch_index = (np.logical_not(joint_exists)).nonzero()[:, 0]
-        joint_index = (np.logical_not(joint_exists)).nonzero()[:, 1]
+        batch_index = (np.logical_not(joint_exists)).nonzero()[0]
+        joint_index = (np.logical_not(joint_exists)).nonzero()[1]
         loss_weight[batch_index, joint_index, :, :] = 0.0
 
     # logger.debug(loss_weight)
@@ -202,14 +202,14 @@ def process_folder(
         acc_joints=acc_joints,
     )
 
-    _, cid2cidread = read_camera_order(get_output_path(unlabeled, output_folder))
-    cid_to_reverse = config["flip_cameras"]
-    cid_read_to_reverse = [cid2cidread[cid] for cid in cid_to_reverse]
+    # _, cid2cidread = read_camera_order(get_output_path(unlabeled, output_folder))
+    # cid_to_reverse = config["flip_cameras"]
+    # cid_read_to_reverse = [cid2cidread[cid] for cid in cid_to_reverse]
 
-    pred = flip_pred(pred, cid_read_to_reverse)
-    #logger.debug("Flipping heatmaps")
-    #heatmap = flip_heatmap(heatmap, cid_read_to_reverse)
-    #logger.debug("Flipping heatmaps")
+    # pred = flip_pred(pred, cid_read_to_reverse)
+    # #logger.debug("Flipping heatmaps")
+    # #heatmap = flip_heatmap(heatmap, cid_read_to_reverse)
+    # #logger.debug("Flipping heatmaps")
 
     save_dict(pred, save_path_pred)
     #if type(heatmap) != np.memmap:
@@ -241,7 +241,9 @@ def create_dataloader():
     train_session_id_list, test_session_id_list = session_id_list, session_id_list
     if args.train_folder_list is None:
         args.train_folder_list = ["2018-05-29--18-58-22--semih"]
-    test_folder_list = ["2018-06-07--17-00-16--semih-walking--3"]
+    # test_folder_list = ["2018-06-07--17-00-16--semih-walking--3"]
+    test_folder_list = ["2018-11-04-f2-pierre-C-flipped"]
+    train_folder_list = []
     # make sure training and test sets are mutually exclusive
     assert (
         len(set.intersection(set(args.train_folder_list), set(test_folder_list))) == 0
@@ -253,7 +255,7 @@ def create_dataloader():
             train=True,
             sigma=args.sigma,
             session_id_train_list=train_session_id_list,
-            folder_train_list=args.train_folder_list,
+            folder_train_list=train_folder_list,
             img_res=args.img_res,
             hm_res=args.hm_res,
             augmentation=args.augmentation,
@@ -442,6 +444,8 @@ def step(loader, model, optimizer, mode, heatmap, epoch, num_classes, acc_joints
     for i, (inputs, target, meta) in enumerate(loader):
         np.random.seed()
         am["data_time"].update(time.time() - start)
+        print(inputs.shape, target.shape)
+
         input_var = torch.autograd.Variable(on_cuda(inputs))
         target_var = torch.autograd.Variable(on_cuda(target, non_blocking=True))
 
@@ -457,20 +461,22 @@ def step(loader, model, optimizer, mode, heatmap, epoch, num_classes, acc_joints
             #if heatmap is not None:
             #    heatmap[cam_read_id, img_id, :] = smap
 
-        # loss = df3dLoss(output, target_var, meta["joint_exists"], num_classes)
+        loss = df3dLoss(output, target_var, meta["joint_exists"], num_classes)
         if mode == mode.train:
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
 
+        am["losses"].update(to_numpy(loss.detach()).mean())
         acc = accuracy(heatmap_batch, target, acc_joints)
-        # am["acces"].add(acc)
+        am["acces"].update(to_numpy(acc).mean())
         mse_err = mse_acc(target_var.data.cpu(), heatmap_batch)
-        # am["mse"].add(mse_err)
+        am["mse"].update(to_numpy(mse_err).mean())
         am["batch_time"].update(time.time() - start)
         start = time.time()
 
-        bar.suffix = "{epoch} | ({batch}/{size}) D:{data:.6f}s|B:{bt:.3f}s|L:{loss:.8f}|Acc:{acc: .4f}|Mse:{mse: .3f} F-T:{mse_femur: .3f} T-Tar:{mse_tibia: .3f} Tar-tip:{mse_tarsus: .3f}".format(
+        # "F-T:{mse_femur: .3f} T-Tar:{mse_tibia: .3f} Tar-tip:{mse_tarsus: .3f}"
+        bar.suffix = "{epoch} | ({batch}/{size}) D:{data:.6f}s|B:{bt:.3f}s|L:{loss:.8f}|Acc:{acc: .4f}|Mse:{mse: .3f}".format(
             epoch=epoch,
             batch=i + 1,
             size=len(loader),
@@ -481,10 +487,10 @@ def step(loader, model, optimizer, mode, heatmap, epoch, num_classes, acc_joints
             loss=am["losses"].avg,
             acc=am["acces"].avg,
             mse=am["mse"].avg,
-            mse_hip=am["body_coxa"].avg,
-            mse_femur=am["coxa_femur"].avg,
-            mse_tibia=am["femur_tibia"].avg,
-            mse_tarsus=am["tarsus_tip"].avg,
+            # mse_hip=am["body_coxa"].avg,
+            # mse_femur=am["coxa_femur"].avg,
+            # mse_tibia=am["femur_tibia"].avg,
+            # mse_tarsus=am["tarsus_tip"].avg,
         )
         bar.next()
 

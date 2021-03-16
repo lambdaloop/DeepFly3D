@@ -27,3 +27,5 @@ def debug_enabled():
 
 def getLogger():
     return logging.getLogger(__name__)
+
+getLogger().setLevel(level=logging.DEBUG)

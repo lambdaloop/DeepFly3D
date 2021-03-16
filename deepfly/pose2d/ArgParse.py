@@ -130,7 +130,7 @@ def add_arguments(parser):
     # input-output
     parser.add_argument(
         "--num-classes",
-        default=config["skeleton"].num_joints // 2,
+        default=config["skeleton"].num_joints,
         type=int,
         metavar="N",
         dest="num_classes",
@@ -145,7 +145,7 @@ def add_arguments(parser):
     )
     parser.add_argument(
         "--train-joints",
-        default=range(config["skeleton"].num_joints // 2),
+        default=range(config["skeleton"].num_joints),
         nargs="+",
         dest="train_joints",
         type=int,
@@ -153,7 +153,7 @@ def add_arguments(parser):
     )
     parser.add_argument(
         "--acc-joints",
-        default=range(config["skeleton"].num_joints // 2),
+        default=range(config["skeleton"].num_joints),
         nargs="+",
         type=int,
         dest="acc_joints",
@@ -199,12 +199,12 @@ def add_arguments(parser):
         help="Number of residual modules at each location in the hourglass",
     )
     parser.add_argument(
-        "-ir", "--img-res", default=[256, 512], type=int, nargs="+", metavar="N"
+        "-ir", "--img-res", default=[704, 864], type=int, nargs="+", metavar="N"
     )
     parser.add_argument(
         "-hr",
         "--hm-res",
-        default=[64, 128],
+        default=[176, 216],
         type=int,
         nargs="+",
         metavar="N",
